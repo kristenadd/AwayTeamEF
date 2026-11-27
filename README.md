@@ -8,7 +8,8 @@ My family didn't let me play M-rated games like Quake growing up, so I played El
 With this project, I wanted to make an easy way to play it again, especially at LAN parties.
 
 **[Download the latest release](https://github.com/marinohardin/AwayTeamEF/releases/latest)**
-for macOS (Apple Silicon), Windows or Linux & Steam Deck. You need your own copy of the game.
+for macOS (Apple Silicon), Windows or Linux & Steam Deck, or [build it for iPhone and iPad](#new-iphone-and-ipad).
+You need your own copy of the game.
 
 ## What This Is
 
@@ -42,6 +43,23 @@ the other joins as a second Hazard Team member, on the same network or over the 
 Co-op is new, but has tested well. See the [co-op guide](docs/GUIDE.md#co-op) for the
 details and its known limits, and report any issues.
 
+## New: iPhone and iPad
+
+**Play the campaign on an iPhone or iPad with a game controller.**
+
+- **Touch menus.** Tap through the start screen, menus and setup like on any other app.
+- **Controller play.** Xbox, PlayStation, Switch Pro and MFi controllers work with a standard
+  dual-analog FPS layout: sticks move and look, triggers fire, and the controller drives the menus too
+  (**A** accepts, **B** goes back, the d-pad or left stick moves). No on-screen game pad.
+- **Full screen, the right shape.** The game fills the widescreen display; menus and loading screens
+  stay in their original 4:3.
+- **Bring your own game files.** Tap **Import** to pick the game's `BaseEF` folder or `.pk3` files,
+  or copy them into Files > On My iPhone/iPad > Elite Force > baseEF.
+
+There's no App Store or release download: you build it from source and install it with a free or
+paid Apple developer account. See [Building for iPhone and iPad](docs/BUILDING.md#iphone-and-ipad).
+Co-op isn't available on iOS yet.
+
 ## Screenshots
 
 <img width="2047" height="1147" alt="AwayTeamEF: Borg lighting" src="https://github.com/user-attachments/assets/3298a13c-faf3-43b5-a72d-3d1deff3e529" />
@@ -62,6 +80,7 @@ downloaded, no PC needed. The Expansion Pack is optional.
 | **macOS** (most tested) | `.dmg` — drag the app to Applications | Apple Silicon (M1 or later), macOS 12+ |
 | **Windows** | `-setup.exe` installer, or the `.zip` | Windows 10 or 11, 64-bit |
 | **Linux & Steam Deck** | `.AppImage` — make it executable and open it | glibc 2.31+ (Ubuntu 20.04 or later), SteamOS |
+| **iPhone & iPad** | Build from source ([how](docs/BUILDING.md#iphone-and-ipad)) | iOS / iPadOS 15+, a game controller |
 
 Windows and Linux need a graphics driver with Vulkan 1.1. The Windows build isn't code-signed yet:
 if Windows says "Windows protected your PC", click **More info**, then **Run anyway**.
@@ -82,6 +101,7 @@ Steps for each platform, Steam Deck setup, and where saves live:
 - **A server browser** with player lists, map previews, favorites and `stvef://` join links.
 - **One-click server hosting** with a status window and automatic router port opening.
 - **Modern graphics:** widescreen, Retina / high resolution, full screen, and quality presets.
+- **iPhone and iPad** with touch menus and game controller play. See [above](#new-iphone-and-ipad).
 - **Automatic update checks** so you know when a new version is out.
   
 <img width="783" height="964" alt="AwayTeamEF: Holomatch Menus" src="https://github.com/user-attachments/assets/70a4ed86-ad1c-449f-89a7-6efecc681add" />
@@ -97,6 +117,7 @@ Steps for each platform, Steam Deck setup, and where saves live:
 ## Known Issues
 
 - **The Mac is the most tested platform.** Windows and Linux have had less testing on real PCs.
+- **iOS is new.** The campaign has been played on an iPhone; Holomatch and iPad have had less testing.
 - **Co-op is new.** Please report what you find, especially between different OS's or over the internet.
 - **Expansion Pack content needs the Expansion Pack's data**. 
 - **Back up your saves.** Just in case.
