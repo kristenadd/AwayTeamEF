@@ -882,7 +882,29 @@ overylays UI_DrawConnectText from ui_connect.cpp
 */
 extern void CG_CenterGiantLine( float y, const char *string );	//cg_scoreboard
 
+qboolean cg_drawingInfo;
+
+static void CG_DrawInformationScreen( void );
+void CG_FillRect2( float x, float y, float width, float height, const float *color );	// cg_drawtools.cpp
+
+/*
+CG_DrawInformation: the loading screen. With ui_menuAspect (the iOS default) it is drawn in
+a centered 4:3 box like the menus, black at the sides (CG_AdjustFrom640 reads cg_drawingInfo),
+while the game itself still fills the screen.
+*/
 void CG_DrawInformation( void ) {
+	int w = cgs.glconfig.vidWidth, h = cgs.glconfig.vidHeight;
+
+	cg_drawingInfo = qtrue;
+	if ( cg_menuAspect.integer && !cg_forceAspect.integer && w * 480 > h * 640 ) {
+		static const float black[4] = { 0, 0, 0, 1 };
+		CG_FillRect2( 0, 0, w, h, black );
+	}
+	CG_DrawInformationScreen();
+	cg_drawingInfo = qfalse;
+}
+
+static void CG_DrawInformationScreen( void ) {
 	const char	*s;
 	const char	*info;
 	qhandle_t	levelshot;
@@ -910,7 +932,11 @@ void CG_DrawInformation( void ) {
 	}
 	// blend a detail texture over it
 	detail = cgi_R_RegisterShader( "levelShotDetail" );
-	cgi_R_DrawStretchPic( 0, 0, cgs.glconfig.vidWidth, cgs.glconfig.vidHeight, 0, 0, 1, 1, detail );
+	{
+		float dx = 0, dy = 0, dw = SCREEN_WIDTH, dh = SCREEN_HEIGHT;
+		CG_AdjustFrom640( &dx, &dy, &dw, &dh );	// the whole screen, or the 4:3 box
+		cgi_R_DrawStretchPic( dx, dy, dw, dh, 0, 0, 1, 1, detail );
+	}
 
 	CG_LoadBar();
 

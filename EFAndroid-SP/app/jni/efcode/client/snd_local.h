@@ -114,6 +114,7 @@ typedef struct
 	qboolean	doppler;
 	qboolean	fullVolume;
 	qboolean	paused;			// held by S_PauseGameSounds: not painted, position kept
+	qboolean	loadHeld;		// started during an SP map load: held until it ends (S_HoldLoadingSounds)
 } channel_t;
 
 

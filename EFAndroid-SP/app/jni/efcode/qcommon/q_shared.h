@@ -144,7 +144,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #if defined( ELITEFORCE ) && defined( EF_DESKTOP ) && defined( EF_APP_VERSION )
 // the version players and server browsers see; PRODUCT_NAME stays as it was
 // because it also names files (the PID file)
-#if defined( __APPLE__ )
+#if defined( EF_IOS )
+#define Q3_VERSION "Elite Force for iOS " EF_APP_VERSION
+#elif defined( __APPLE__ )
 #define Q3_VERSION "Elite Force for Mac " EF_APP_VERSION
 #elif defined( _WIN32 )
 #define Q3_VERSION "Elite Force for Windows " EF_APP_VERSION

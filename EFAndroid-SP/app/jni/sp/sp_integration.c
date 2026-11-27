@@ -227,15 +227,17 @@ int SPR_LerpTag(void* tag, int model, int startFrame, int endFrame, float frac, 
 static int       g_spLoading = 0;
 static char      g_spLoadMap[64] = {0};
 
+extern void S_HoldLoadingSounds( qboolean hold );	// snd_dma.c
 void SP_BeginLoad(const char* map){
     g_spLoading = 1;
+    S_HoldLoadingSounds( qtrue );	// sounds started during the load play from their start when it ends
     Q_strncpyz(g_spLoadMap, map ? map : "", sizeof(g_spLoadMap));
 }
 // The stock client clears the notify lines once cgame init is done (CL_InitCGame, cl_cgame.c);
 // the SP path inits its own cgame, so clear them here. Otherwise every line printed during the
 // load stays over the first seconds of the level (and its subtitles) for con_notifytime.
 extern void Con_ClearNotify( void );
-void SP_EndLoad(void){ g_spLoading = 0; Con_ClearNotify(); }
+void SP_EndLoad(void){ g_spLoading = 0; Con_ClearNotify(); S_HoldLoadingSounds( qfalse ); }
 int  SP_IsLoading(void){ return g_spLoading; }
 // SP_DrawLoadingScreen() is defined lower down, after client.h is included (it needs `cls`).
 
@@ -424,7 +426,20 @@ void SP_DrawLoadingScreen(void){
         shot = re.RegisterShaderNoMip(name);
     }
     re.SetColor( NULL );
-    if( shot ) {
+    if( shot && Cvar_VariableIntegerValue( "ui_menuAspect" ) && w * 3 > h * 4 ) {
+        // ui_menuAspect 1 (the iOS default): the levelshot in a centered 4:3 box, black at the sides,
+        // like the menus
+        float black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        int bw = h * 4 / 3, x = ( w - bw ) / 2;
+        re.SetColor( black );
+        re.DrawStretchPic( 0, 0, w, h, 0, 0, 0, 0, cls.whiteShader );
+        re.SetColor( NULL );
+        re.DrawStretchPic( x, 0, bw, h, 0, 0, 1, 1, shot );
+        {
+            qhandle_t detail = re.RegisterShaderNoMip( "levelShotDetail" );
+            if( detail ) re.DrawStretchPic( x, 0, bw, h, 0, 0, 2.5f, 2.0f, detail );
+        }
+    } else if( shot ) {
         re.DrawStretchPic( 0, 0, w, h, 0, 0, 1, 1, shot );
         // EF1 SP 1:1: retail CG_DrawInformation (efgame cg_info.cpp) overlays the `levelShotDetail`
         // scanline texture on top of the levelshot. Draw it here too (no-op if the shader isn't in the

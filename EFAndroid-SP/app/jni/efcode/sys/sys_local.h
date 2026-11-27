@@ -53,6 +53,9 @@ unsigned int CON_LogRead( char *out, unsigned int outSize );
 #ifdef __APPLE__
 char *Sys_StripAppBundle( char *pwd );
 #endif
+#ifdef EF_IOS
+char *Sys_IOSDocumentsPath( void );	// sys_ios.m
+#endif
 
 void Sys_GLimpSafeInit( void );
 void Sys_GLimpInit( void );

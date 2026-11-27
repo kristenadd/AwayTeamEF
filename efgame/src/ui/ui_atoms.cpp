@@ -1503,7 +1503,9 @@ Resolution-agnostic (height-derived). Call from UI_Init and from the video-menu 
 void UI_RecalcAspect( void ) {
 	uis.scaley = uis.glconfig.vidHeight * (1.0/480.0);
 
-	if ( ui.Cvar_VariableValue( "cg_forceAspect" )
+	// ui_menuAspect 1: the menus alone stay 4:3 (the game itself fills the screen); the iOS
+	// defaults turn it on. cg_forceAspect pillarboxes the game as well.
+	if ( ( ui.Cvar_VariableValue( "cg_forceAspect" ) || ui.Cvar_VariableValue( "ui_menuAspect" ) )
 		&& uis.glconfig.vidWidth * 480 > uis.glconfig.vidHeight * 640 ) {
 		uis.scalex = uis.scaley;	// uniform (no anamorphic stretch)
 		uis.bias   = 0.5 * ( uis.glconfig.vidWidth - ( uis.glconfig.vidHeight * (640.0/480.0) ) );

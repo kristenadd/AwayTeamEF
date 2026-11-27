@@ -328,8 +328,8 @@ Sys_InitPIDFile
 */
 void Sys_InitPIDFile( const char *gamedir ) {
 	if( Sys_WritePIDFile( gamedir ) && !sys_headless ) {
-#if !defined(DEDICATED) && !defined(__ANDROID__)
-		// On Android a stale PID is NORMAL (the OS kills backgrounded apps and
+#if !defined(DEDICATED) && !defined(__ANDROID__) && !defined(EF_IOS)
+		// On Android (and iOS) a stale PID is NORMAL (the OS kills backgrounded apps and
 		// users swipe the app away), so the "Abnormal Exit / safe video
 		// settings?" dialog is pure noise there — and "safe" desktop video
 		// settings would be wrong for the device anyway. Desktop keeps it.
@@ -802,6 +802,9 @@ char *Sys_ParseProtocolUri( const char *uri )
 		   game data lives at /sdcard/Android/obb/com.voyager.efsp/baseEF/
 		   (see ANDROID_DATA_ROOT in jni/src/CMakeLists.txt). */
 #		define DEFAULT_BASEDIR ANDROID_DATA_ROOT
+#	elif defined(EF_IOS)
+		/* iOS: the app's Documents folder (shown in the Files app), see sys_ios.m */
+#		define DEFAULT_BASEDIR Sys_IOSDocumentsPath()
 #	elif defined(__APPLE__)
 #		define DEFAULT_BASEDIR Sys_StripAppBundle(Sys_BinaryPath())
 #	else
@@ -911,7 +914,7 @@ int main( int argc, char **argv )
 	// Set the initial time base
 	Sys_Milliseconds( );
 
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 	// This is passed if we are launched by double-clicking
 	if ( argc >= 2 && Q_strncmp ( argv[1], "-psn", 4 ) == 0 )
 		argc = 1;

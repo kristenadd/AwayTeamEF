@@ -3907,12 +3907,12 @@ static void CL_Stub_SetGamma( unsigned char r[256], unsigned char g[256], unsign
 // is backgrounded. Always returning qfalse defeated the Android lifecycle
 // guard — the renderer kept touching a destroyed Vulkan surface on app
 // switch/screen-off (intermittent surface-lost ERR_FATAL).
-#ifdef __ANDROID__
+#if defined( __ANDROID__ ) || defined( EF_IOS )
 qboolean Sys_AndroidBackgrounded( void );   // sdl_input.c, set synchronously by the SDL event filter
 #endif
 static qboolean CL_IsMinimized( void ) {
 	cvar_t *m = Cvar_Get( "com_minimized", "0", 0 );
-#ifdef __ANDROID__
+#if defined( __ANDROID__ ) || defined( EF_IOS )
 	if ( Sys_AndroidBackgrounded() )
 		return qtrue;
 #endif

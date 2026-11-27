@@ -51,7 +51,7 @@ on stdin, +exec and the test hooks still work), and losing the focus or being
 minimized doesn't set com_unfocused / com_minimized, so the game runs as if
 focused. Without it, nothing changes.
 */
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 qboolean Sys_MacTestBackground( void );
 #define IN_TestBackground( ) Sys_MacTestBackground( )
 #else
@@ -82,8 +82,8 @@ static cvar_t *in_utf8              = NULL;
 static SDL_GameController *gamepad = NULL;
 static int gamepadSentKey[SDL_CONTROLLER_BUTTON_MAX];   // menu-key translation memory (see IN_GamepadMenuKey)
 
-#ifdef __ANDROID__
-/* Synchronous Android lifecycle handling. SDL posts APP_* events from the
+#if defined( __ANDROID__ ) || defined( EF_IOS )
+/* Synchronous Android (and iOS) lifecycle handling. SDL posts APP_* events from the
    activity thread; waiting for the queued copy can mean rendering one more
    frame into a destroyed surface. The filter only flips a flag (no cvar /
    engine calls — those are not thread-safe); IN_Frame applies it. */
@@ -126,7 +126,7 @@ the menu's 4:3 area, instead of the exclusive-fullscreen behaviour (pointer kept
 grabbed in relative mode for the console and loading, system cursor never shown)
 that left no way to reach the menu bar.
 */
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 #define IN_FULLSCREEN_IS_DESKTOP	1
 #else
 #define IN_FULLSCREEN_IS_DESKTOP	0
@@ -545,7 +545,7 @@ static void IN_GobbleMotionEvents( void )
 		Com_Printf( "IN_GobbleMotionEvents failed: %s\n", SDL_GetError( ) );
 }
 
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 #include <dlfcn.h>
 #include <stdbool.h>
 #include <mach-o/dyld.h>
@@ -878,6 +878,9 @@ void IN_UpdateMouseMenuPosition( int xabs, int yabs, int *xrelp, int *yrelp ) {
 
 	*xrelp = xrel;
 	*yrelp = yrel;
+	if ( in_mouseTrace && in_mouseTrace->integer )
+		Com_Printf( "[mouse] ui pos %.1f,%.1f (from %d,%d) rel %d,%d vid %dx%d\n", x, y, xabs, yabs, xrel, yrel,
+			cls.glconfig.vidWidth, cls.glconfig.vidHeight );
 }
 
 /*
@@ -1023,6 +1026,11 @@ static void IN_InitJoystick( void )
 	   ESC) instead of quitting the app. */
 	SDL_SetHint( SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1" );
 #endif
+#ifdef EF_IOS
+	/* iOS: SDL otherwise makes the accelerometer joystick 0, so the game reads the
+	   phone's tilt (a slow drift) instead of the controller. */
+	SDL_SetHint( SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0" );
+#endif
 
 	// SDL 2.0.4 requires SDL_INIT_JOYSTICK to be initialized separately from
 	// SDL_INIT_GAMECONTROLLER for SDL_JoystickOpen() to work correctly,
@@ -1075,12 +1083,23 @@ static void IN_InitJoystick( void )
 	if( in_joystickNo->integer < 0 || in_joystickNo->integer >= total )
 		Cvar_Set( "in_joystickNo", "0" );
 
-#ifdef __ANDROID__
+#if defined( __ANDROID__ ) || defined( EF_IOS )
 	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "1", CVAR_ARCHIVE );
 #else
 	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "0", CVAR_ARCHIVE );
 #endif
 
+#ifdef EF_IOS
+	// the first game controller, when the chosen joystick isn't one
+	if ( !SDL_IsGameController( in_joystickNo->integer ) ) {
+		for ( i = 0; i < total; i++ ) {
+			if ( SDL_IsGameController( i ) ) {
+				Cvar_Set( "in_joystickNo", va( "%d", i ) );
+				break;
+			}
+		}
+	}
+#endif
 	stick = SDL_JoystickOpen( in_joystickNo->integer );
 
 	if (stick == NULL) {
@@ -1253,6 +1272,36 @@ static int IN_GamepadMenuKey( int button, int defaultKey )
 	return defaultKey;
 }
 
+/*
+Menus on a game controller: A = Enter, B = Escape (IN_GamepadMenuKey), and the
+left stick or the d-pad send the arrow keys, repeating while held. The keys a
+stick direction sent are remembered (in_stickSent) and released when a menu
+opens or closes, so no arrow key is ever left down in play (the arrows move).
+*/
+static int in_stickSent[2][2];		// [axis LEFTX/LEFTY][neg/pos]: menu key sent
+static int in_menuRepeatKey;		// arrow key held from the stick or d-pad
+static int in_menuRepeatTime;
+static qboolean in_stickMenu;		// the left stick is navigating a menu
+
+static qboolean IN_GamepadMenuNow( void )
+{
+	return ( Key_GetCatcher( ) & KEYCATCH_UI ) && !Cvar_VariableIntegerValue( "ui_bindGrab" );
+}
+
+static void IN_MenuRepeatPress( int key )
+{
+	if ( key == K_UPARROW || key == K_DOWNARROW || key == K_LEFTARROW || key == K_RIGHTARROW ) {
+		in_menuRepeatKey = key;
+		in_menuRepeatTime = Sys_Milliseconds( ) + 400;
+	}
+}
+
+static void IN_MenuRepeatRelease( int key )
+{
+	if ( key == in_menuRepeatKey )
+		in_menuRepeatKey = 0;
+}
+
 static void IN_GamepadMove( void )
 {
 	int i;
@@ -1280,9 +1329,11 @@ static void IN_GamepadMove( void )
 			if ( pressed ) {
 				key = IN_GamepadMenuKey( SDL_CONTROLLER_BUTTON_A + i, key );
 				gamepadSentKey[i] = key;
+				IN_MenuRepeatPress( key );
 			} else if ( gamepadSentKey[i] ) {
 				key = gamepadSentKey[i];   // release exactly what was pressed
 				gamepadSentKey[i] = 0;
+				IN_MenuRepeatRelease( key );
 			}
 
 			// CROUCH toggle on the gamepad B button (cl_crouchToggle, default on) -- same sticky state
@@ -1315,11 +1366,69 @@ static void IN_GamepadMove( void )
 		}
 	}
 
+	// a menu opened or closed: release what the left stick sent and start it from neutral
+	if ( IN_GamepadMenuNow( ) != in_stickMenu )
+	{
+		int a, d;
+		for ( a = 0; a < 2; a++ ) {
+			for ( d = 0; d < 2; d++ ) {
+				if ( in_stickSent[a][d] )
+					Com_QueueEvent( in_eventTime, SE_KEY, in_stickSent[a][d], qfalse, 0, NULL );
+				in_stickSent[a][d] = 0;
+			}
+			if ( in_joystickUseAnalog->integer && !in_stickMenu && stick_state.oldaaxes[a] ) {
+				// leaving play: center the analog axes the stick drove
+				int ax, sg;
+				if ( KeyToAxisAndSign( a == 0 ? K_PAD0_LEFTSTICK_LEFT : K_PAD0_LEFTSTICK_UP, &ax, &sg ) )
+					Com_QueueEvent( in_eventTime, SE_JOYSTICK_AXIS, ax, 0, 0, NULL );
+				if ( KeyToAxisAndSign( a == 0 ? K_PAD0_LEFTSTICK_RIGHT : K_PAD0_LEFTSTICK_DOWN, &ax, &sg ) )
+					Com_QueueEvent( in_eventTime, SE_JOYSTICK_AXIS, ax, 0, 0, NULL );
+			}
+			stick_state.oldaaxes[a] = 0;
+		}
+		in_menuRepeatKey = 0;
+		in_stickMenu = IN_GamepadMenuNow( );
+	}
+	// a held arrow (stick or d-pad) repeats in menus
+	if ( in_menuRepeatKey && in_stickMenu && Sys_Milliseconds( ) >= in_menuRepeatTime )
+	{
+		Com_QueueEvent( in_eventTime, SE_KEY, in_menuRepeatKey, qtrue, 0, NULL );
+		in_menuRepeatTime = Sys_Milliseconds( ) + 130;
+	}
+
 	// check axes
 	for (i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++)
 	{
 		int axis = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_LEFTX + i);
 		int oldAxis = stick_state.oldaaxes[i];
+
+		// menus: the left stick is the arrow keys, on at half throw (no drift)
+		if ( in_stickMenu && i <= SDL_CONTROLLER_AXIS_LEFTY )
+		{
+			int dir = axis > 16000 ? 1 : axis < -16000 ? -1 : 0;
+			int oldDir = oldAxis > 0 ? 1 : oldAxis < 0 ? -1 : 0;
+			if ( dir != oldDir )
+			{
+				int d;
+				for ( d = 0; d < 2; d++ ) {
+					if ( in_stickSent[i][d] ) {
+						Com_QueueEvent( in_eventTime, SE_KEY, in_stickSent[i][d], qfalse, 0, NULL );
+						IN_MenuRepeatRelease( in_stickSent[i][d] );
+						in_stickSent[i][d] = 0;
+					}
+				}
+				if ( dir ) {
+					int key = ( i == SDL_CONTROLLER_AXIS_LEFTX )
+						? ( dir < 0 ? K_LEFTARROW : K_RIGHTARROW )
+						: ( dir < 0 ? K_UPARROW : K_DOWNARROW );
+					Com_QueueEvent( in_eventTime, SE_KEY, key, qtrue, 0, NULL );
+					in_stickSent[i][dir > 0] = key;
+					IN_MenuRepeatPress( key );
+				}
+				stick_state.oldaaxes[i] = dir * 32767;
+			}
+			continue;
+		}
 
 		// Smoothly ramp from dead zone to maximum value
 		float f = ((float)abs(axis) / 32767.0f - in_joystickThreshold->value) / (1.0f - in_joystickThreshold->value);
@@ -1961,6 +2070,107 @@ void IN_ClearCrouchToggle( void ) { }
 IN_ProcessEvents
 ===============
 */
+#ifdef EF_IOS
+/*
+===============
+IN_IOSTouch
+
+iOS has no on-screen game pad: play is on a game controller, menus by touch.
+
+Menus: the engine turns the first finger into the menu cursor and a left click
+itself, instead of SDL's touch-as-mouse emulation. SDL's emulation keeps a
+"finger is down" flag that only that finger's lift clears, and a lift that
+comes while the window is being replaced (Accept on the brightness screen and
+other video changes recreate it) is lost, after which SDL ignores every touch.
+The click is pressed one frame after the cursor moves: the menus pick the item
+under the cursor when they redraw, so a press in the same instant would go to
+the item that had the focus before (a slider, say).
+
+Play (no menu up): a tap with two fingers, or any tap when no controller is
+connected, brings up the menu (Escape), so the game is never stuck without a
+way back to the menus. Cinematics skip the same way.
+===============
+*/
+static SDL_FingerID in_iosFinger = (SDL_FingerID)-1;	// the finger driving the menu cursor
+static qboolean in_iosTouchDown, in_iosTouchUp;			// its click, held for one frame
+
+static void IN_IOSResetTouch( void )
+{
+	if ( in_iosFinger != (SDL_FingerID)-1 && !in_iosTouchDown )
+		Com_QueueEvent( in_eventTime, SE_KEY, K_MOUSE1, qfalse, 0, NULL );	// never leave it held
+	in_iosFinger = (SDL_FingerID)-1;
+	in_iosTouchDown = in_iosTouchUp = qfalse;
+}
+
+// the previous frame's tap: the menus have seen the cursor arrive by now
+static void IN_IOSFlushTouchClick( void )
+{
+	if ( in_iosTouchDown ) {
+		Com_QueueEvent( in_eventTime, SE_KEY, K_MOUSE1, qtrue, 0, NULL );
+		in_iosTouchDown = qfalse;
+	}
+	if ( in_iosTouchUp ) {
+		Com_QueueEvent( in_eventTime, SE_KEY, K_MOUSE1, qfalse, 0, NULL );
+		in_iosTouchUp = qfalse;
+	}
+}
+
+static void IN_IOSTouchCursor( const SDL_TouchFingerEvent *f )
+{
+#ifdef USE_FLEXIBLE_DISPLAY
+	int ww = 0, wh = 0, xrel, yrel;
+
+	if ( !SDL_window || !cl_flexibleDisplay->integer )
+		return;
+	SDL_GetWindowSize( SDL_window, &ww, &wh );
+	IN_UpdateMouseMenuPosition( (int)( f->x * ww ), (int)( f->y * wh ), &xrel, &yrel );
+	if ( xrel || yrel )
+		Com_QueueEvent( in_eventTime, SE_MOUSE, xrel, yrel, 0, NULL );
+#endif
+}
+
+// phase: 0 = down, 1 = motion, 2 = up
+static void IN_IOSTouch( const SDL_TouchFingerEvent *f, int phase )
+{
+	qboolean menu = ( Key_GetCatcher( ) & KEYCATCH_UI ) != 0;
+
+	if ( in_mouseTrace && in_mouseTrace->integer )
+		Com_Printf( "[touch] %s finger %lld at %.3f,%.3f | tracking %lld catcher 0x%x\n",
+			phase == 0 ? "down" : phase == 1 ? "move" : "up", (long long)f->fingerId, f->x, f->y,
+			(long long)in_iosFinger, Key_GetCatcher( ) );
+	if ( phase == 0 ) {
+		if ( menu ) {
+			// a new touch always takes the cursor: the finger tracked before may have been
+			// lifted while the window was replaced (a video restart), when its lift is lost
+			IN_IOSFlushTouchClick( );
+			if ( in_iosFinger != (SDL_FingerID)-1 )
+				Com_QueueEvent( in_eventTime, SE_KEY, K_MOUSE1, qfalse, 0, NULL );
+			in_iosFinger = f->fingerId;
+			IN_IOSTouchCursor( f );
+			in_iosTouchDown = qtrue;
+		} else if ( !( Key_GetCatcher( ) & KEYCATCH_CONSOLE )
+			&& ( gamepad == NULL || SDL_GetNumTouchFingers( f->touchId ) >= 2 ) ) {
+			Com_QueueEvent( in_eventTime, SE_KEY, K_ESCAPE, qtrue, 0, NULL );
+			Com_QueueEvent( in_eventTime, SE_KEY, K_ESCAPE, qfalse, 0, NULL );
+		}
+		return;
+	}
+	if ( f->fingerId != in_iosFinger )
+		return;
+	if ( phase == 1 ) {
+		if ( menu )
+			IN_IOSTouchCursor( f );	// drags sliders and scroll bars
+		return;
+	}
+	// lifted
+	if ( in_iosTouchDown )
+		in_iosTouchUp = qtrue;
+	else
+		Com_QueueEvent( in_eventTime, SE_KEY, K_MOUSE1, qfalse, 0, NULL );
+	in_iosFinger = (SDL_FingerID)-1;
+}
+#endif
+
 static void IN_ProcessEvents( void )
 {
 	SDL_Event e;
@@ -1970,6 +2180,9 @@ static void IN_ProcessEvents( void )
 	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
 			return;
 
+#ifdef EF_IOS
+	IN_IOSFlushTouchClick( );
+#endif
 	while( SDL_PollEvent( &e ) )
 	{
 		if( IN_TestBackground( ) && IN_TestBackgroundDrops( &e ) )
@@ -2179,6 +2392,12 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_MOUSEMOTION:
+#ifdef EF_IOS
+				// iOS: touch is for the menus only (play uses a game controller); a finger
+				// on the screen during play must not turn the view
+				if ( e.motion.which == SDL_TOUCH_MOUSEID && !( Key_GetCatcher( ) & KEYCATCH_UI ) )
+					break;
+#endif
 #ifdef __ANDROID__
 				/* Ignore touch-synthesized mouse motion during gameplay: a tap
 				   warps the cursor, producing a huge delta that spins the view.
@@ -2215,6 +2434,11 @@ static void IN_ProcessEvents( void )
 #endif
 				break;
 
+#ifdef EF_IOS
+			case SDL_FINGERDOWN:   IN_IOSTouch( &e.tfinger, 0 ); break;
+			case SDL_FINGERMOTION: IN_IOSTouch( &e.tfinger, 1 ); break;
+			case SDL_FINGERUP:     IN_IOSTouch( &e.tfinger, 2 ); break;
+#endif
 #ifdef __ANDROID__
 			case SDL_FINGERDOWN:   IN_TouchFinger( &e.tfinger, 0 ); break;
 			case SDL_FINGERMOTION: IN_TouchFinger( &e.tfinger, 1 ); break;
@@ -2230,6 +2454,11 @@ static void IN_ProcessEvents( void )
 					   touch-control tap-to-fire handles that; otherwise it
 					   double-fires. (Menus still use touch clicks.) */
 					if ( e.button.which == SDL_TOUCH_MOUSEID && Key_GetCatcher( ) == 0 )
+						break;
+#endif
+#ifdef EF_IOS
+					// iOS: touch-synthesized clicks only in menus (see IN_IOSTouch for play)
+					if ( e.button.which == SDL_TOUCH_MOUSEID && !( Key_GetCatcher( ) & KEYCATCH_UI ) )
 						break;
 #endif
 					if( in_mouseTrace && in_mouseTrace->integer )
@@ -2354,7 +2583,7 @@ static void IN_ProcessEvents( void )
 						break;
 #endif
 
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 					// The close button and Cmd+W (the Window menu's Close) ask
 					// before quitting (sys_osx_data.m); IN_Init keeps SDL from
 					// turning them into SDL_QUIT. Cmd+Q still quits at once.
@@ -2447,6 +2676,20 @@ void IN_Frame( void )
 		{
 			SDL_StopTextInput( );
 		}
+	}
+#elif defined( EF_IOS )
+	if ( Cvar_VariableIntegerValue( "com_minimized" ) != in_androidBackgrounded )
+		Cvar_SetValue( "com_minimized", in_androidBackgrounded );
+	{
+		/* The on-screen keyboard only for the console and chat, or a menu text
+		   field that reports its focus (ui_textfield, as on Android); a hardware
+		   keyboard types into menus without it. */
+		qboolean want = ( Key_GetCatcher( ) & ( KEYCATCH_CONSOLE | KEYCATCH_MESSAGE ) ) != 0
+			|| ( ( Key_GetCatcher( ) & KEYCATCH_UI ) && Cvar_VariableIntegerValue( "ui_textfield" ) );
+		if ( want && !SDL_IsTextInputActive( ) )
+			SDL_StartTextInput( );
+		else if ( !want && SDL_IsTextInputActive( ) )
+			SDL_StopTextInput( );
 	}
 #else
 	{
@@ -2552,7 +2795,7 @@ void IN_Init( void *windowData )
 	in_menuRelativeMouse = Cvar_Get( "in_menuRelativeMouse", "0", CVAR_ARCHIVE );
 #endif
 
-#ifdef __ANDROID__
+#if defined( __ANDROID__ ) || defined( EF_IOS )
 	in_joystick = Cvar_Get( "in_joystick", "1", CVAR_ARCHIVE|CVAR_LATCH );
 #else
 	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_ARCHIVE|CVAR_LATCH );
@@ -2576,7 +2819,7 @@ void IN_Init( void *windowData )
 	}
 #endif
 
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 	// closing the game window comes as SDL_WINDOWEVENT_CLOSE only (asks first)
 	SDL_SetHint( SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0" );
 #endif
@@ -2591,11 +2834,20 @@ void IN_Init( void *windowData )
 	SDL_StopTextInput( );
 	/* Synchronous lifecycle handling — see IN_AndroidLifecycleFilter. */
 	SDL_SetEventFilter( IN_AndroidLifecycleFilter, NULL );
+#elif defined( EF_IOS )
+	// starting text input pops up the on-screen keyboard on iOS; a hardware
+	// keyboard still sends key events without it
+	SDL_StopTextInput( );
+	// iOS terminates an app that renders in the background: same synchronous flag as Android
+	SDL_SetEventFilter( IN_AndroidLifecycleFilter, NULL );
+	// fingers drive the menus directly (IN_IOSTouch), not through SDL's touch-as-mouse
+	SDL_SetHint( SDL_HINT_TOUCH_MOUSE_EVENTS, "0" );
+	IN_IOSResetTouch( );
 #else
 	SDL_StartTextInput( );
 #endif
 
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 	in_debugMouse = Cvar_Get( "in_debugMouse", "0", CVAR_TEMP );
 	Cmd_AddCommand( "in_mousestate", IN_MouseState_f );
 #endif
@@ -2631,7 +2883,7 @@ void IN_Shutdown( void )
 
 	IN_ShutdownJoystick( );
 
-#if defined( __APPLE__ ) && !defined( __ANDROID__ )
+#if defined( __APPLE__ ) && !defined( __ANDROID__ ) && !defined( EF_IOS )
 	Cmd_RemoveCommand( "in_mousestate" );
 #endif
 

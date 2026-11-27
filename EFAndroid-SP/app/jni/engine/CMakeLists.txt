@@ -37,7 +37,10 @@ option(EF_VM_JIT "QVM JIT (aarch64: needs MAP_JIT work on macOS; x86_64: vm_x86.
 option(EF_COOP "Single-player co-op (experimental)" OFF)
 # GOG installer extraction (sys_osx_gog.c + liblzma). On macOS the Mac launcher calls it; on
 # Windows/Linux the launcher core (efcode/launcher, target eflauncher) compiles it and links liblzma.
-if(APPLE)
+if(IOS)
+  # no liblzma in the iOS SDK; game files come in through the Files app / the import button
+  set(EF_GOG OFF)
+elseif(APPLE)
   option(EF_GOG "GOG offline-installer extraction (sys_osx_gog.c, liblzma)" ON)
 else()
   option(EF_GOG "GOG offline-installer extraction in the launcher core (sys_osx_gog.c, liblzma)" ON)
@@ -169,7 +172,14 @@ file(GLOB BOTLIB_SRC ${EF}/botlib/*.c)
 set(SDL_SRC ${EF}/sdl/sdl_input.c ${EF}/sdl/sdl_snd.c ${EF}/sdl/sdl_gamma.c ${EF}/sdl/sdl_glimp.c)
 
 # sys layer per platform
-if(APPLE)
+if(IOS)
+  # iOS / iPadOS: tty console (Xcode's console) + UIKit start screen, game-file import and
+  # dialogs (sys_ios.m). No Cocoa launcher, server window or co-op sheet.
+  set(SYS_SRC
+    ${EF}/sys/con_log.c ${EF}/sys/con_tty.c
+    ${EF}/sys/sys_unix.c ${EF}/sys/sys_main.c ${EF}/sys/sys_autoupdater.c ${EF}/sys/sys_ios.m)
+  set_source_files_properties(${EF}/sys/sys_ios.m PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+elseif(APPLE)
   # lilium-voyager's macOS sys layer: tty console + Cocoa dialogs/launcher (sys_osx*.m).
   set(SYS_SRC
     ${EF}/sys/con_log.c ${EF}/sys/con_tty.c ${EF}/sys/sys_autoupdater.c
@@ -271,7 +281,10 @@ if(EF_COMPILER_GCC)
   target_compile_options(sp_game_bridge PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>)
 endif()
 target_compile_definitions(sp_game_bridge PRIVATE NDEBUG EF_DYLIB_MODULES
-  $<$<BOOL:${EF_COOP}>:EF_COOP>)   # co-op's engine side: macOS (sys_osx_coop.m), Windows/Linux (sys_coop_host.c)
+  $<$<BOOL:${EF_COOP}>:EF_COOP>)
+if(IOS)
+  target_compile_definitions(sp_game_bridge PRIVATE EF_IOS)
+endif()   # co-op's engine side: macOS (sys_osx_coop.m), Windows/Linux (sys_coop_host.c)
 if(WIN32)
   target_compile_definitions(sp_game_bridge PRIVATE NOMINMAX)
   if(EF_COOP)
@@ -308,7 +321,10 @@ else()
   set(EF_LIBMAD_FPM FPM_64BIT)
 endif()
 
-if(APPLE)
+if(IOS)
+  set(EF_HOMEPATH_NAME "EliteForce-iOS")
+  set(EF_PLATFORM_DEFS EF_IOS)	# no system libcurl or OpenAL on iOS; co-op is Mac/Windows/Linux only
+elseif(APPLE)
   set(EF_HOMEPATH_NAME "EliteForce-MacOS")
   set(EF_PLATFORM_DEFS
     USE_CURL USE_SYSTEM_CURL	# HTTP map downloads (sv_dlURL) via the macOS system libcurl
@@ -337,7 +353,7 @@ target_compile_definitions(efsp PRIVATE
   $<$<NOT:$<BOOL:${EF_VM_JIT}>>:NO_VM_COMPILED>
   USE_VULKAN USE_VULKAN_API
   USE_FLEXIBLE_DISPLAY=1
-  USE_OPENAL USE_OPENAL_DLOPEN
+  $<$<NOT:$<BOOL:${IOS}>>:USE_OPENAL> $<$<NOT:$<BOOL:${IOS}>>:USE_OPENAL_DLOPEN>
   ${EF_PLATFORM_DEFS}
   PRODUCT_VERSION="1.40"
   EF_APP_VERSION="${EF_APP_VERSION}"
@@ -352,7 +368,14 @@ endif()
 target_compile_options(efsp PRIVATE ${EF_ENGINE_COPTS})
 
 target_link_libraries(efsp PRIVATE sp_game_bridge ${EF_SDL_TARGET})
-if(APPLE)
+if(IOS)
+  target_link_libraries(efsp PRIVATE
+    "-framework UIKit" "-framework Foundation" "-framework UniformTypeIdentifiers" dl m)
+  # the game modules resolve engine symbols at dlopen (efgame's -undefined dynamic_lookup)
+  # and find the bundled dylibs in the app's Frameworks folder
+  set_target_properties(efsp PROPERTIES ENABLE_EXPORTS ON
+    BUILD_RPATH "@executable_path/Frameworks" INSTALL_RPATH "@executable_path/Frameworks")
+elseif(APPLE)
   target_link_libraries(efsp PRIVATE
     "-framework Cocoa" "-framework IOKit" "-framework WebKit" dl m)
   if(EF_GOG)

@@ -3,7 +3,7 @@
 #
 # Include after project(). Sets (include_guard'ed):
 #   EF_ROOT              repository root
-#   EF_PLATFORM          macos | windows | linux | android
+#   EF_PLATFORM          macos | ios | windows | linux | android
 #   EF_ARCH              arm64 | x86_64 | armv7 | x86   (the engine's ARCH_STRING)
 #   EF_COMPILER_CLANG    TRUE for Clang / AppleClang
 #   EF_COMPILER_GCC      TRUE for GCC (e.g. Homebrew / Ubuntu mingw-w64, Linux gcc)
@@ -20,6 +20,8 @@ get_filename_component(EF_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 if(ANDROID)
   set(EF_PLATFORM android)
+elseif(IOS)
+  set(EF_PLATFORM ios)
 elseif(APPLE)
   set(EF_PLATFORM macos)
 elseif(WIN32)
@@ -78,6 +80,13 @@ endif()
 function(ef_default_prefix out subdir probe)
   if(EF_PLATFORM STREQUAL "macos")
     set(_p "${EF_ROOT}/${subdir}/install")
+  elseif(EF_PLATFORM STREQUAL "ios")
+    # ios/build-deps.sh builds everything (SDL2, FFmpeg, MoltenVK) into one prefix per SDK
+    if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+      set(_p "${EF_ROOT}/build-ios-deps/iphonesimulator/install")
+    else()
+      set(_p "${EF_ROOT}/build-ios-deps/iphoneos/install")
+    endif()
   else()
     set(_p "${EF_ROOT}/${subdir}/${EF_PLATFORM}/install")
   endif()

@@ -39,6 +39,9 @@ thirdparty/
 /build-macos-*/
 /build-ffmpeg/
 /build-deps/
+# iOS port: ios/build-deps.sh and ios/make-app.sh build trees
+/build-ios/
+/build-ios-deps/
 efgame/buildmac/
 efgame/buildmac-coop/
 # Packaged app / release output (macos/make-app.sh writes "dist/Elite Force.app")

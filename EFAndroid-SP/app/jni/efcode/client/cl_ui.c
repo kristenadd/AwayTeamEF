@@ -629,9 +629,20 @@ static int CL_GetUIScreenPlacement( void ) {
 	// menu touch/mouse hit-testing AND the soft-keyboard IME rect (CL_AdjustFromUI) aligned with the
 	// pillarboxed draw. Off (default) -> falls through to the existing "16:9 FILL" stretch. The same engine
 	// cvar drives the draw side, so the two can't disagree. Overrides the cl_viewmode placement on purpose.
-	if ( !Com_Holomatch() && Cvar_VariableIntegerValue( "cg_forceAspect" ) ) {	// an SP cvar
+	// ui_menuAspect 1 keeps only the SP menus 4:3 (libefui's UI_RecalcAspect reads it too)
+	if ( !Com_Holomatch() && ( Cvar_VariableIntegerValue( "cg_forceAspect" )	// an SP cvar
+		|| Cvar_VariableIntegerValue( "ui_menuAspect" ) ) ) {
 		return SCR_VERT_CENTER | SCR_HOR_CENTER;
 	}
+#ifdef EF_IOS
+	// The single-player menus (libefui) draw stretched to the whole screen unless cg_forceAspect
+	// is set (UI_RecalcAspect), so map the pointer the same way. With a mouse the 4:3 mapping
+	// below only makes the menu arrow drift a little from the system pointer; a touch has to
+	// land exactly under the finger, and on a 2:1 phone screen it was off by whole buttons.
+	if ( !Com_Holomatch() ) {
+		return SCR_VERT_STRETCH | SCR_HOR_STRETCH;
+	}
+#endif
 
 	if ( cl_viewmode->integer <= 2 ) {
 		placement = SCR_VERT_CENTER | SCR_HOR_CENTER;

@@ -2540,6 +2540,20 @@ void Com_ExecuteCfg(void)
 		}
 #endif
 
+#ifdef EF_IOS
+		// One-time iOS defaults (ios_defaults.cfg in the app bundle's baseEF): the
+		// dual-analog controller binds and native-resolution full screen. Applied once
+		// per IOS_DEFAULTS_VERSION, then the saved config owns them (as on Android below).
+#define IOS_DEFAULTS_VERSION 4	// v2: r_highdpi 1 (native Retina resolution); v3: ui_menuAspect 1; v4: com_soundMegs 64
+		if ( Cvar_VariableIntegerValue( "in_iosDefaults" ) < IOS_DEFAULTS_VERSION )
+		{
+			Cbuf_ExecuteText( EXEC_NOW, Com_Holomatch() ? "exec ios_defaults_hm.cfg\n" : "exec ios_defaults.cfg\n" );
+			Cbuf_Execute();
+			Cvar_Get( "in_iosDefaults", "0", CVAR_ARCHIVE );
+			Cvar_Set( "in_iosDefaults", XSTRING( IOS_DEFAULTS_VERSION ) );
+			com_hmNetDefaultsApplied = qtrue;	// so the config is written with the stamp
+		}
+#endif
 #ifdef __ANDROID__
 		// One-time Android control/graphics defaults. autoexec.cfg runs every
 		// boot AFTER hmconfig.cfg, so putting binds/setas there would clobber

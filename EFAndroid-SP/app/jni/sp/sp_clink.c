@@ -45,7 +45,12 @@ const char *SP_ModulePath( const char *soname ){
         strncat( base, ".so", sizeof(base) - strlen(base) - 1 );
 #endif
     }
+#ifdef EF_IOS
+    // iOS: code must live in the bundle's Frameworks folder to be signed and loadable
+    snprintf( path, sizeof(path), "%s/Frameworks/%s", Sys_BinaryPath(), base );
+#else
     snprintf( path, sizeof(path), "%s/%s", Sys_BinaryPath(), base );
+#endif
     return path;
 }
 #endif

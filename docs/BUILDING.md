@@ -87,3 +87,33 @@ command line also skips the launcher:
 Technical background on the port is in
 [docs/macos-port-notes.md](macos-port-notes.md).
 
+
+## iPhone and iPad
+
+The iOS / iPadOS app (iOS 15 or later, arm64) is built by `ios/make-app.sh`:
+
+```sh
+ios/make-app.sh                  # Simulator build  -> dist/ios-sim/Elite Force.app
+SDK=iphoneos ios/make-app.sh     # device build     -> dist/ios/Elite Force.app
+SDK=iphoneos INSTALL=<udid> ios/make-app.sh   # ...and install it (xcrun devicectl)
+```
+
+It runs `ios/build-deps.sh` first when needed. That script builds SDL2 2.32 (sdl2-compat does
+not build for iOS), the same LGPL Bink-only FFmpeg as the Mac and copies MoltenVK from Khronos's
+official release, per SDK, into `build-ios-deps/<sdk>/install`. Device builds are signed with
+your "Apple Development" identity and a development provisioning profile for `BUNDLE_ID`
+(default `org.voyagersp.ios`) or the team's `*` wildcard profile that Xcode creates;
+`SIGN_IDENTITY` and `PROFILE` override them.
+
+How the iOS app works (`efcode/sys/sys_ios.m`, `EF_IOS`):
+
+- A touch start screen picks Single Player or Holomatch and imports the game files: choose the
+  game's `BaseEF` folder or its `.pk3` files in the Files picker, or copy them into
+  Files > On My iPhone/iPad > Elite Force > baseEF. Saves and the config live there too.
+- Menus work by touch. Play uses a game controller (Xbox, PlayStation, Switch Pro or MFi) with a
+  standard dual-analog layout (`ios/baseEF/ios_defaults.cfg`, applied once; rebind in Controls).
+  During play, a two-finger tap (any tap without a controller) brings up the menu.
+- SDL2 predates the UIScene lifecycle the iOS 27 SDK requires; `sys_ios.m` adds the scene
+  delegate and attaches SDL's windows to the scene.
+- Not on iOS: the co-op sheet, GOG installer unpacking, OpenAL and HTTP map downloads (no system
+  libcurl). LAN server discovery by broadcast needs Apple's multicast entitlement.

@@ -1667,7 +1667,12 @@ static void FS_LoadCmodPaks( void ) {
 	if ( !Com_Holomatch() || !fs_apppath || !fs_apppath->string[0] ) {
 		return;
 	}
+#ifdef EF_IOS
+	// iOS bundles are flat: <App>.app/cmod
+	Com_sprintf( dir, sizeof( dir ), "%s%ccmod", fs_apppath->string, PATH_SEP );
+#else
 	Com_sprintf( dir, sizeof( dir ), "%s%c..%cResources%ccmod", fs_apppath->string, PATH_SEP, PATH_SEP, PATH_SEP );
+#endif
 #else
 	extern char *Sys_BinaryPath( void );	// sys_main.c
 	extern int Sys_FileTime( char *path );

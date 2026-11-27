@@ -32,7 +32,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "snd_local.h"
 #include "snd_codec.h"
 
+#ifdef EF_IOS
+#define DEF_COMSOUNDMEGS "64"	// iOS mixes at 48 kHz: every sound takes twice the 22 kHz space
+#else
 #define DEF_COMSOUNDMEGS "8"
+#endif
 
 /*
 ===============================================================================

@@ -99,6 +99,7 @@ mix after the request, from s_paintedtime, which S_GetSoundtime resets to just p
 position every mix (so nothing mixed ahead of the pause is lost).
 */
 static qboolean	s_gamePauseWanted;		// requested by S_PauseGameSounds
+static qboolean	s_loadHold;				// S_HoldLoadingSounds: an SP map load is under way
 qboolean		s_gameSoundsHeld;		// applied: held channels + music are frozen
 static int		s_gamePauseStart;		// s_paintedtime when the hold began
 static qboolean	s_gamePauseMusicReset;	// music was stopped/restarted while held: don't rebase it
@@ -756,7 +757,8 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 	ch->rightvol = ch->master_vol;		// unless the game isn't running
 	ch->doppler = qfalse;
 	ch->fullVolume = fullVolume;
-	ch->paused = qfalse;	// a channel taken over while paused belongs to the new sound
+	ch->paused = s_loadHold;	// a channel taken over while paused belongs to the new sound
+	ch->loadHeld = s_loadHold;
 }
 
 /*
@@ -1452,6 +1454,9 @@ static void S_ApplyGamePause( void ) {
 			if ( !ch->paused ) {
 				continue;
 			}
+			if ( ch->loadHeld ) {
+				continue;	// waits for the load to end (S_HoldLoadingSounds)
+			}
 			ch->paused = qfalse;
 			if ( ch->thesfx && ch->startSample != START_SAMPLE_IMMEDIATE ) {
 				ch->startSample += delta;
@@ -1485,6 +1490,36 @@ static void S_ApplyGamePause( void ) {
 S_Base_PauseGameSounds
 ============
 */
+/*
+=================
+S_HoldLoadingSounds
+
+Sounds the game starts while an SP map is still loading (the intro's captain's log
+starts 1.45 s into borg1, during the load) are held and start from their beginning
+when the load ends. Otherwise the mixer timed them from the moment they were asked
+for and, once frames resumed after the load (seconds on a phone), played them from
+that far in: Janeway's log began at its third paragraph on iOS.
+=================
+*/
+void S_HoldLoadingSounds( qboolean hold ) {
+	channel_t	*ch;
+	int			i;
+
+	s_loadHold = hold ? qtrue : qfalse;
+	if ( hold ) {
+		return;
+	}
+	for ( i = 0, ch = s_channels; i < MAX_CHANNELS; i++, ch++ ) {
+		if ( !ch->loadHeld ) {
+			continue;
+		}
+		ch->loadHeld = qfalse;
+		ch->paused = s_gameSoundsHeld;	// still held if the game's sounds are paused
+		ch->startSample = START_SAMPLE_IMMEDIATE;
+		Com_DPrintf( "S_HoldLoadingSounds: %s starts now that the load is over\n", ch->thesfx ? ch->thesfx->soundName : "?" );
+	}
+}
+
 void S_Base_PauseGameSounds( qboolean pause ) {
 	s_gamePauseWanted = pause ? qtrue : qfalse;
 }
@@ -1830,11 +1865,34 @@ void S_FreeOldestSound( void ) {
 	oldest = Com_Milliseconds();
 	used = 0;
 
+	// Never the data of a sound a channel is playing or holding (S_HoldLoadingSounds): a map load
+	// that filled the pool freed the intro's captain's log while it waited for the load to end,
+	// so it never played (iOS mixes at 48 kHz, which doubles every sound's size). Only when every
+	// sound in memory is in use does the oldest go anyway.
 	for (i=1 ; i < s_numSfx ; i++) {
+		int c;
 		sfx = &s_knownSfx[i];
-		if (sfx->inMemory && sfx->lastTimeUsed<oldest) {
-			used = i;
-			oldest = sfx->lastTimeUsed;
+		if (!sfx->inMemory || sfx->lastTimeUsed>=oldest) {
+			continue;
+		}
+		for ( c = 0; c < MAX_CHANNELS; c++ ) {
+			if ( s_channels[c].thesfx == sfx ) {
+				break;
+			}
+		}
+		if ( c < MAX_CHANNELS ) {
+			continue;	// in use
+		}
+		used = i;
+		oldest = sfx->lastTimeUsed;
+	}
+	if ( !used ) {
+		for (i=1 ; i < s_numSfx ; i++) {
+			sfx = &s_knownSfx[i];
+			if (sfx->inMemory && sfx->lastTimeUsed<oldest) {
+				used = i;
+				oldest = sfx->lastTimeUsed;
+			}
 		}
 	}
 

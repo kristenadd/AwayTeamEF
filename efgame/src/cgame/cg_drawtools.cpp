@@ -17,7 +17,8 @@ void CG_AdjustFrom640( float *x, float *y, float *w, float *h ) {
 	// scale) on X and add the wide-screen centering bias (the formula that ships #if 0'd below). Black
 	// side bars are painted in CG_Draw2D. Resolution-agnostic (works on any device screen). When the
 	// toggle is off, keep the original full-width anamorphic stretch (16:9).
-	if ( cg_forceAspect.integer && cgs.glconfig.vidWidth * 480 > cgs.glconfig.vidHeight * 640 ) {
+	if ( ( cg_forceAspect.integer || ( cg_drawingInfo && cg_menuAspect.integer ) )
+		&& cgs.glconfig.vidWidth * 480 > cgs.glconfig.vidHeight * 640 ) {
 		float bias = 0.5f * ( cgs.glconfig.vidWidth - ( cgs.glconfig.vidHeight * 640.0f / 480.0f ) );
 		*x = *x * cgs.screenYScale + bias;
 		*y = *y * cgs.screenYScale;
@@ -827,7 +828,16 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 	cgi_R_SetColor(color);
 	
 //	ax = x * cgs.charScale + cgs.bias;
-	ax = x * cgs.screenXScale;
+	// the same placement as CG_AdjustFrom640: full-width stretch, or the centered 4:3 box
+	// (cg_forceAspect, or the loading screen under ui_menuAspect)
+	float xscale = cgs.screenXScale, xbias = 0;
+	{
+		float bx = 0, by = 0, bw = 1, bh = 1;
+		CG_AdjustFrom640( &bx, &by, &bw, &bh );
+		xscale = bw;
+		xbias = bx;
+	}
+	ax = x * xscale + xbias;
 	ay = y * cgs.screenYScale;
 	holdY = ay;
 
@@ -851,7 +861,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 				frow = (float)propMapTiny[ch][1] / 256.0f;
 				fwidth = (float)propMapTiny[ch][2] / 256.0f;
 				fheight = (float)(PROP_TINY_HEIGHT + special) / 256.0f;
-				aw = (float)propMapTiny[ch][2] * cgs.screenXScale;
+				aw = (float)propMapTiny[ch][2] * xscale;
 				ah = (float)(PROP_TINY_HEIGHT+ special) * cgs.screenYScale;
 
 				cgi_R_DrawStretchPic( ax, ay, aw, ah, fcol, frow, fcol + fwidth, frow + fheight, 
@@ -862,7 +872,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 				aw = 0;
 			}
 
-			ax += (aw + (float)PROP_GAP_TINY_WIDTH * cgs.screenXScale);
+			ax += (aw + (float)PROP_GAP_TINY_WIDTH * xscale);
 			s++;
 		}
 	} 
@@ -874,7 +884,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 			ch = *s & 255;
 			if ( ch == ' ' ) 
 			{
-				aw = (float)PROP_SPACE_BIG_WIDTH * cgs.screenXScale;
+				aw = (float)PROP_SPACE_BIG_WIDTH * xscale;
 			}
 			else if ( propMap[ch][2] != -1 ) 
 			{
@@ -886,7 +896,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 				frow = (float)propMapBig[ch][1] / 256.0f;
 				fwidth = (float)propMapBig[ch][2] / 256.0f;
 				fheight = (float)(PROP_BIG_HEIGHT + special) / 256.0f;
-				aw = (float)propMapBig[ch][2] * cgs.screenXScale;
+				aw = (float)propMapBig[ch][2] * xscale;
 				ah = (float)(PROP_BIG_HEIGHT + special) * cgs.screenYScale;
 
 				cgi_R_DrawStretchPic( ax, ay, aw, ah, fcol, frow, fcol + fwidth, frow + fheight, 
@@ -898,7 +908,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 				aw = 0;
 			}
 
-			ax += (aw + (float)PROP_GAP_BIG_WIDTH * cgs.screenXScale);
+			ax += (aw + (float)PROP_GAP_BIG_WIDTH * xscale);
 			s++;
 		}
 	} 
@@ -911,7 +921,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 			ch = *s & 255;
 			if ( ch == ' ' ) 
 			{
-				aw = (float)PROP_SPACE_WIDTH * cgs.screenXScale;
+				aw = (float)PROP_SPACE_WIDTH * xscale;
 			}
 			else if ( propMap[ch][2] != -1 ) 
 			{
@@ -923,7 +933,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 				frow = (float)propMap[ch][1] / 256.0f;
 				fwidth = (float)propMap[ch][2] / 256.0f;
 				fheight = (float)(PROP_HEIGHT + special) / 256.0f;
-				aw = (float)propMap[ch][2] * cgs.screenXScale;
+				aw = (float)propMap[ch][2] * xscale;
 				ah = (float)(PROP_HEIGHT + special) * cgs.screenYScale;
 
 				cgi_R_DrawStretchPic( ax, ay, aw, ah, fcol, frow, fcol + fwidth, frow + fheight, 
@@ -935,7 +945,7 @@ static void CG_DrawProportionalString2( int x, int y, const char* str, const vec
 				aw = 0;
 			}
 
-			ax += (aw + (float)PROP_GAP_WIDTH * cgs.screenXScale);
+			ax += (aw + (float)PROP_GAP_WIDTH * xscale);
 			s++;
 		}	
 	}

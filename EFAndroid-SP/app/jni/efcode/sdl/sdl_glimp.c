@@ -1325,7 +1325,7 @@ transition is under way, the renderer swaps it in without restarting
 (re.ReplaceWindow -> VKimp_ReplaceWindow), so it works mid-game too.
 */
 #include <SDL_syswm.h>
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 #include <objc/runtime.h>
 #include <objc/message.h>
 #endif
@@ -1333,7 +1333,7 @@ transition is under way, the renderer swaps it in without restarting
 // VOYAGERSP_TEST_BACKGROUND (sys_osx.m), the quiet test mode for automated runs:
 // always windowed, and the window goes behind every other window instead of
 // coming forward (Sys_MacTestBackgroundWindow), so a test never takes the focus.
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 qboolean Sys_MacTestBackground( void );
 void Sys_MacTestBackgroundWindow( void *window );
 #define VKimp_TestBackground( ) Sys_MacTestBackground( )
@@ -1383,7 +1383,7 @@ static void VKimp_DesiredWindow( vkimpWindow_t *win )
 }
 
 // height of the window's title bar in points (0 if unknown)
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 static id VKimp_NSWindow( void );
 typedef struct { double x, y, w, h; } vkimpRect_t;	// NSRect
 static int VKimp_TitleBarHeight( void )
@@ -1466,7 +1466,7 @@ static void VKimp_LogWindow( const char *what )
 		( SDL_GetWindowFlags( SDL_window ) & SDL_WINDOW_FULLSCREEN ) ? ", fullscreen" : "" );
 }
 
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 static id VKimp_NSWindow( void )
 {
 	SDL_SysWMinfo info;
@@ -1775,7 +1775,7 @@ qboolean VKimp_ReplaceWindow( glconfig_t *config )
 	ri.IN_Shutdown();	// releases the mouse grab / text input of the old window
 	SDL_DestroyWindow( oldWindow );
 	SDL_window = newWindow;
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 	if ( VKimp_TestBackground( ) )
 		Sys_MacTestBackgroundWindow( VKimp_NSWindow() );
 	else
@@ -1812,7 +1812,7 @@ void VKimp_Init( glconfig_t *config )
 	ri.Printf( PRINT_ALL, "VKimp_Init( )\n" );
 
 	SDL_SetHint( SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight" );
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 	// Native fullscreen in its own Space, shared with the green title-bar button,
 	// Ctrl+Cmd+F and the Window menu, so either way in can be undone either way out.
 	// The menu bar and title bar (green button) appear when hovering the top edge.
@@ -1882,7 +1882,7 @@ void VKimp_Init( glconfig_t *config )
 				VKimp_SetWindowedSize( want.width, want.height );
 			VKimp_NoteWindowedSize();
 			SDL_SetWindowMinimumSize( SDL_window, 640, 360 );
-#ifdef __APPLE__
+#if defined( __APPLE__ ) && !defined( EF_IOS )
 			Sys_MacTestBackgroundWindow( VKimp_NSWindow() );	// only in that mode
 #endif
 			if ( want.fullscreen ) {

@@ -4191,7 +4191,21 @@ static void vk_destroy_swapchain_objects( void )
 	}
 
 #ifdef USE_UPLOAD_QUEUE
+	// Texture uploads still being recorded into the staging command buffer must be
+	// submitted before it is reset: resetting it with staging_buffer.offset left
+	// non-zero made every later upload record into a command buffer that is no longer
+	// recording, so those textures were never filled (they sampled as opaque white).
+	// iOS hits this on every start: the window turns from portrait to landscape right
+	// after the menus register their fonts, which restarts the swapchain.
+	vk_wait_staging_buffer();
+	if ( vk.staging_buffer.offset != 0 ) {
+		VkSemaphore pending = vk.image_uploaded;	// a final flush's semaphore, still owed to the next frame
+		vk.image_uploaded = VK_NULL_HANDLE;
+		vk_flush_staging_buffer( qfalse );	// submits and waits
+		vk.image_uploaded = pending;
+	}
 	qvkResetCommandBuffer( vk.staging_command_buffer, 0 );
+	vk.staging_buffer.offset = 0;
 #endif
 
 	vk_destroy_pipelines( qfalse );

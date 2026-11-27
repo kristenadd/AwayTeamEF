@@ -26,10 +26,23 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __QGL_H__
 #define __QGL_H__
 
+// iOS: SDL_opengl.h is empty there (no OpenGL); the Vulkan renderer only needs its GL
+// types and enums, so read it as on the desktop
+#ifdef EF_IOS
+#	include <SDL_config.h>	// defines __IPHONEOS__ once (include-guarded), before it is lifted
+#endif
+#if defined( EF_IOS ) && defined( __IPHONEOS__ )
+#	undef __IPHONEOS__
+#	define QGL_IPHONEOS_UNDEFINED
+#endif
 #ifdef USE_LOCAL_HEADERS
 #	include "SDL_opengl.h"
 #else
 #	include <SDL_opengl.h>
+#endif
+#ifdef QGL_IPHONEOS_UNDEFINED
+#	define __IPHONEOS__ 1
+#	undef QGL_IPHONEOS_UNDEFINED
 #endif
 
 extern void (APIENTRYP qglActiveTextureARB) (GLenum texture);

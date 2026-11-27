@@ -579,6 +579,8 @@ extern	vmCvar_t		cg_gun_z;
 extern	vmCvar_t		cg_drawGun;
 extern	vmCvar_t		cg_viewsize;
 extern	vmCvar_t		cg_forceAspect;
+extern	vmCvar_t		cg_menuAspect;
+extern	qboolean		cg_drawingInfo;	// CG_DrawInformation is drawing (ui_menuAspect boxes it to 4:3)
 extern	vmCvar_t		cg_autoswitch;
 extern	vmCvar_t		cg_simpleItems;
 extern	vmCvar_t		cg_fov;
