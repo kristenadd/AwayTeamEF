@@ -95,7 +95,7 @@ done
 # ---- app icon (asset catalog with the single 1024 px icon) ----
 ICONWORK="$ROOT/build-ios/$TAG/icon"
 rm -rf "$ICONWORK" && mkdir -p "$ICONWORK/Assets.xcassets/AppIcon.appiconset"
-cp "$ROOT/macos/icon/AppIcon-1024.png" "$ICONWORK/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+cp "$ROOT/ios/AppIcon-1024.png" "$ICONWORK/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
 cat > "$ICONWORK/Assets.xcassets/AppIcon.appiconset/Contents.json" <<'EOF'
 { "images" : [ { "filename" : "icon-1024.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" } ],
   "info" : { "author" : "xcode", "version" : 1 } }
