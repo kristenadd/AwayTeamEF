@@ -41,6 +41,7 @@ mkdir -p "$DL" "$WORK"
 fetch() {
 	tarball="$1/$2"
 	if [ ! -f "$tarball" ]; then
+		mkdir -p "$1"
 		echo "Downloading $2" >&2
 		curl -fL -o "$tarball.part" "$3"
 		mv "$tarball.part" "$tarball"
