@@ -117,3 +117,13 @@ How the iOS app works (`efcode/sys/sys_ios.m`, `EF_IOS`):
   delegate and attaches SDL's windows to the scene.
 - Not on iOS: the co-op sheet, GOG installer unpacking, OpenAL and HTTP map downloads (no system
   libcurl). LAN server discovery by broadcast needs Apple's multicast entitlement.
+
+### Signed builds in GitHub Actions
+
+`.github/workflows/release-builds.yml` runs on every push to `main`, on `macos-v*` tags and by
+hand. It builds the Mac app signed with Developer ID, notarized and stapled (`macos/make-release.sh`),
+and an ad-hoc iPhone / iPad `.ipa` (`ios/make-app.sh` with `IPA=`), which it uploads to Firebase App
+Distribution. Before signing, it registers the Firebase testers' devices with Apple and makes a fresh
+ad-hoc profile holding every registered device (`fastlane/Fastfile`). On a tag, the notarized dmg and
+zip go into that version's release. The comment at the top of the workflow lists the secrets and
+variables; `~/Projects/SigningSecrets` sets them.

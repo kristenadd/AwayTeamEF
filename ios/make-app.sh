@@ -7,10 +7,13 @@
 # Device builds are signed with an "Apple Development" identity and a development
 # provisioning profile that matches BUNDLE_ID (an app-specific one or the team's "*"
 # wildcard profile Xcode makes). Override with SIGN_IDENTITY=<sha1 or name> and
-# PROFILE=<path to .mobileprovision>.
+# PROFILE=<path to .mobileprovision>. With an ad-hoc profile (and SIGN_IDENTITY an "Apple
+# Distribution" identity) the app is signed for release testing: get-task-allow follows the profile.
 #
 #   NO_BUILD=1     re-bundle the existing build outputs only
 #   INSTALL=<udid> also install on that device (devicectl) or booted Simulator ("booted")
+#   IPA=<path>     also package the device build as an .ipa
+#   VERSION, BUILD_NUMBER   CFBundleShortVersionString / CFBundleVersion (default: 1.5.0 / commit count)
 #
 # Needs Xcode, cmake, ninja and pkg-config; ios/build-deps.sh is run when its output is missing.
 set -eu
@@ -22,7 +25,7 @@ BUNDLE_ID="${BUNDLE_ID:-org.voyagersp.ios}"
 VERSION="${VERSION:-1.5.0}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
+BUILD="${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)}"
 JOBS="$(sysctl -n hw.ncpu)"
 case "$SDK" in
 	iphonesimulator) TAG=sim; OUTDIR="$ROOT/dist/ios-sim"; PLATFORM=iPhoneSimulator ;;
@@ -197,6 +200,8 @@ else
 	cp "$PROFILE" "$APP/embedded.mobileprovision"
 	security cms -D -i "$PROFILE" > "$ICONWORK/profile.plist"
 	TEAM="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$ICONWORK/profile.plist")"
+	# true in development profiles, false in ad-hoc / App Store ones
+	GET_TASK_ALLOW="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$ICONWORK/profile.plist" 2>/dev/null || echo false)"
 	ENTITLEMENTS="$ICONWORK/entitlements.plist"
 	cat > "$ENTITLEMENTS" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -205,7 +210,7 @@ else
 <dict>
 	<key>application-identifier</key><string>$TEAM.$BUNDLE_ID</string>
 	<key>com.apple.developer.team-identifier</key><string>$TEAM</string>
-	<key>get-task-allow</key><true/>
+	<key>get-task-allow</key><$GET_TASK_ALLOW/>
 </dict>
 </plist>
 EOF
@@ -223,6 +228,16 @@ else
 fi
 codesign --verify --deep --strict "$APP"
 echo "Built $APP ($VERSION ($BUILD), $SDK, iOS >= $MIN_IOS, $(du -sh "$APP" | cut -f1))"
+
+if [ -n "${IPA:-}" ]; then
+	[ "$SDK" = iphoneos ] || { echo "IPA needs SDK=iphoneos" >&2; exit 1; }
+	PAYLOAD="$ROOT/build-ios/$TAG/ipa"
+	rm -rf "$PAYLOAD" && mkdir -p "$PAYLOAD/Payload"
+	ditto "$APP" "$PAYLOAD/Payload/$APP_NAME.app"
+	mkdir -p "$(dirname "$IPA")" && rm -f "$IPA"
+	(cd "$PAYLOAD" && ditto -c -k --sequesterRsrc --keepParent Payload "$(cd "$(dirname "$IPA")" && pwd)/$(basename "$IPA")")
+	echo "Packaged $IPA"
+fi
 
 if [ -n "${INSTALL:-}" ]; then
 	if [ "$SDK" = iphonesimulator ]; then

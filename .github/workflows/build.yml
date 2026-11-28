@@ -11,10 +11,10 @@
 # for macos-v* releases with their own platform's download. There are no windows-v/linux-v
 # tags any more (1.4.0's were merged into macos-v1.4.0).
 #
-# Signed/notarized macOS releases stay local (Developer ID + notary profile live on
-# the maintainer's Mac): macos/make-release.sh with UPLOAD=1 adds the notarized dmg + zip
-# to the same release. CI builds unsigned (ad-hoc signed) macOS artifacts as a check and
-# never puts them in the release.
+# The signed and notarized Mac dmg + zip come from release-builds.yml (Developer ID and the
+# notary key are repository secrets), which adds them to the same release on the tag;
+# macos/make-release.sh with UPLOAD=1 still can, from the maintainer's Mac. This workflow
+# builds unsigned (ad-hoc signed) macOS artifacts as a check and never puts them in the release.
 # No retail game data is used anywhere in CI: smoke tests use a one-file fixture.
 name: build
 
@@ -311,7 +311,7 @@ jobs:
 
   # ---------------------------------------------------------------- release
   # One draft release per version on the macos-v tag, with the Windows and Linux downloads.
-  # The Mac dmg/zip are notarized locally and added by macos/make-release.sh (UPLOAD=1);
+  # The Mac dmg/zip are notarized and added by release-builds.yml (or macos/make-release.sh UPLOAD=1);
   # the unsigned CI macOS build is never uploaded (it would clobber the notarized files).
   release:
     if: github.ref_type == 'tag' && startsWith(github.ref_name, 'macos-v')
